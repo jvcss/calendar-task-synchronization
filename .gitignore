@@ -1,0 +1,6 @@
+.venv/
+credentials.json
+.env
+.vscode/
+config.ini
+__pycache__/*

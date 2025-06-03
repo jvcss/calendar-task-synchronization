@@ -177,7 +177,7 @@ def parse_workpackages(workpackages):
     return parsed_wps, err
 
 
-def read_events(service, calendar_id, time='2020-10-11T00:00:00Z'):
+def read_events(service, calendar_id, time='2025-02-01T00:00:00Z'):
     """Reads and returns all events on the calendar after the specified time
     Bug: What happens if this function returns nothing and raises an exception?
     """
@@ -441,7 +441,7 @@ def save_logs(wps, errors, sheet_service, sheet_id):
         sheet_id: Id of the sheet in which logs are saved.
     """
     # Error logs
-    range_name = 'errors'
+    range_name = 'errors!A1'
     # Parse errors and insert where the error occured
     to_create_errors = [str(elem) for elem in errors[0]]
     to_create_errors.insert(0, 'to_create_errors')

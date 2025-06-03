@@ -24,6 +24,7 @@ If the task starts with three exclamations (!) marks, it will not be synchronize
 """
 from datetime import datetime
 import synchronization as sync
+from config import settings as s
 
 def main(parameters):
     """Synchronizes OpenProject tasks with Google Calendar.
@@ -104,15 +105,15 @@ if __name__ == "__main__":
     # If 'save_logs' is false, you do not need to provide sheet id.
     # Required parameters to synchronize OpenProject with Google Calendar.
     required_parameters = {
-        'path_to_secret_file': 'path_to_your_servis_accountsecret_file',
+        'path_to_secret_file': s.CREDENTIALS_PATH,
         'SCOPES': ['https://www.googleapis.com/auth/calendar',
                    'https://www.googleapis.com/auth/spreadsheets'],
-        'calendar_id': 'your_google_calendar_id',
-        'openproject_api_url': 'your_open_project_url' + '/api/v3/',
-        'openproject_api_key': 'your_open_project_api_key',
-        'project_name': 'your_projet_name',
-        'save_logs': False,
-        'sheet_id': 'your_google_sheet_id'
+        'calendar_id': s.CALENDAR_ID_EMAIL,
+        'openproject_api_url': 'https://projects.growthsolutions.com.br' + '/api/v3/',
+        'openproject_api_key': s.PROJECTS_API_KEY,
+        'project_name': s.PROJECT_NAME,
+        'save_logs': True,
+        'sheet_id': '1x-dn-_S89fLasqEiYelighvKEX9-mxjjulXtzzF8T2w'
         }
 
     main(required_parameters)
