@@ -339,27 +339,24 @@ def wp_to_event(work_package):
 
 
 
-def str_to_date(date, hour):
-    """Converts str type date and hour to datetime object
+def str_to_date(due_date, due_hour):
+    date_parts = [int(part) for part in due_date.split('-')]
+    
+    if due_hour:
+        hour_parts = due_hour.split(':')
+        # garantir que tenha pelo menos 3 elementos (HH:MM:SS)
+        if len(hour_parts) == 3:
+            hour_parts = [int(part) for part in hour_parts]
+        elif len(hour_parts) == 2:
+            hour_parts = [int(hour_parts[0]), int(hour_parts[1]), 0]
+        elif len(hour_parts) == 1:
+            hour_parts = [int(hour_parts[0]), 0, 0]
+        else:
+            hour_parts = [0, 0, 0]  # Default
+    else:
+        hour_parts = [0, 0, 0]  # Default caso due_hour seja vazio
 
-    Datetime object provides operations. This package converts the datetime string
-    into a datetime object to get the correct dueDate and dueHour. All dates should
-    be in `isoformat`.
-
-    Args:
-        date: YYYY-MM-DD,  Y=Year, M=Month, D=Day, formatted date string
-        hour: HH:MM:SS, H=Hour, M=Minute, S=Seconds, formatted hour string
-
-    Returns:
-        date_time_obj: a datetime.datetime object
-    """
-    due_date = [int(x) for x in date.split('-')]
-    due_hour = [int(x) for x in hour.split(':')]
-    # Year, month, day, hour, minute, seconds
-    date_time_obj = datetime(due_date[0], due_date[1], due_date[2],
-                             due_hour[0], due_hour[1], due_hour[2])
-
-    return date_time_obj
+    return datetime(*date_parts, *hour_parts)
 
 
 def to_create(work_package, service, calendar_id):
