@@ -10,8 +10,8 @@ tabs = st.tabs(["Intro", "Windows Automation", "Linux Automation", "Cron Status"
 with tabs[0]:
     st.header("Automation of Calendar Sync")
     st.markdown("""
-    - **Author:** Tapir Lab
-    - **Date:** December 2020
+    - **Author:** João Victor Cardoso dos Santos (JVCSS)
+    - **Date:** June 2025
 
     Welcome to the Automation of Calendar Synchronization tutorial. Navigate through the tabs to proceed.
     """)
