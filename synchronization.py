@@ -339,24 +339,25 @@ def wp_to_event(work_package):
 
 
 
-def str_to_date(due_date, due_hour):
+def str_to_date(due_date: str, due_hour: str) -> datetime:
     date_parts = [int(part) for part in due_date.split('-')]
-    
+
     if due_hour:
         hour_parts = due_hour.split(':')
-        # garantir que tenha pelo menos 3 elementos (HH:MM:SS)
         if len(hour_parts) == 3:
-            hour_parts = [int(part) for part in hour_parts]
+            # Corrige possível valor decimal nos segundos
+            hour_parts = [int(hour_parts[0]), int(hour_parts[1]), int(float(hour_parts[2]))]
         elif len(hour_parts) == 2:
             hour_parts = [int(hour_parts[0]), int(hour_parts[1]), 0]
         elif len(hour_parts) == 1:
             hour_parts = [int(hour_parts[0]), 0, 0]
         else:
-            hour_parts = [0, 0, 0]  # Default
+            hour_parts = [0, 0, 0]
     else:
-        hour_parts = [0, 0, 0]  # Default caso due_hour seja vazio
+        hour_parts = [0, 0, 0]
 
     return datetime(*date_parts, *hour_parts)
+
 
 
 def to_create(work_package, service, calendar_id):
