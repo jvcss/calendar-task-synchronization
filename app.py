@@ -1,111 +1,93 @@
 import streamlit as st
+import subprocess
 
-st.set_page_config(
-    page_title="Automation of Calendar Sync",
-    layout="wide",
-)
+st.set_page_config(page_title="Automation of Calendar Sync", layout="wide")
 
-# Initialize session state for slide index
-if 'slide' not in st.session_state:
-    st.session_state.slide = 0
+# Define tab structure
+tabs = st.tabs(["Intro", "Windows Automation", "Linux Automation", "Cron Status"])
 
-# Define slides content
-slides = [
-    {
-        "title": "Automation of Calendar Sync.",
-        "author": "Tapir Lab.",
-        "date": "December 2020",
-        "content": None,
-    },
-    {
-        "title": "Automation on Windows",
-        "content": {
-            "Steps": [
-                "Click start and type **Task Scheduler** and run it.",
-                "Go to **Action > Import Task…** and import `Synchronize.xml`.",
-                "In the **Actions** tab, select the action and click Edit.",
-                "Browse to your `run_main.vbs` and select it.",
-                "Copy its full path into the **Start in (optional)** field.",
-                "Click **OK** and run the task manually to verify.",
-            ]
-        }
-    },
-    {
-        "title": "If Import Doesn’t Work",
-        "content": {
-            "Steps": [
-                "Open Task Scheduler and choose **Create Task…**.",
-                "On the **General** tab, name it and enable **Run with highest privileges**.",
-                "On the **Triggers** tab, click **New…** and configure your schedule.",
-                "On the **Actions** tab, click **New…** → **Start a Program**.",
-                "Browse to `run_main.vbs` and set its folder in **Start in (optional)**.",
-                "Adjust any **Conditions** or **Settings**, save, and test.",
-                "For full docs see Microsoft’s Task Scheduler guide: [Microsoft Task Scheduler](https://docs.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-start-page)",
-            ]
-        }
-    },
-    {
-        "title": "Automation on Linux",
-        "content": {
-            "Steps": [
-                "Install `crontab` if needed.",
-                "Cd into the `automation_of_sync` folder.",
-                "Update paths in `synchronization.sh` and `example_crontab.txt`.",
-                "Import the example crontab (will overwrite):\n- `crontab example_crontab.txt`\n- Verify with `crontab -l`",
-                "Grant execute permission if needed:\n```sudo chmod +x synchronization.sh```",
-                "The default job runs `main.py` every 10 minutes and logs to `test.log`.",
-            ]
-        }
-    }
-]
+# Tab 1: Introduction
+with tabs[0]:
+    st.header("Automation of Calendar Sync")
+    st.markdown("""
+    - **Author:** Tapir Lab
+    - **Date:** December 2020
 
-# Navigation buttons
-col1, col2 = st.columns([1, 1])
-with col1:
-    if st.button("◀ Prev"):
-        if st.session_state.slide > 0:
-            st.session_state.slide -= 1
-with col2:
-    if st.button("Next ▶"):
-        if st.session_state.slide < len(slides) - 1:
-            st.session_state.slide += 1
+    Welcome to the Automation of Calendar Synchronization tutorial. Navigate through the tabs to proceed.
+    """)
 
-# Render current slide
-current = slides[st.session_state.slide]
-st.title(current['title'])
+# Tab 2: Windows Automation
+with tabs[1]:
+    st.header("Automation on Windows")
+    st.markdown("""
+    ### Steps:
+    1. Open **Task Scheduler** from Start Menu.
+    2. Select **Action > Import Task** and import `Synchronize.xml`.
+    3. In the **Actions** tab, select the listed action, click **Edit**.
+    4. Browse and select `run_main.vbs`.
+    5. Copy the full path of `run_main.vbs` into **Start in (optional)**.
+    6. Click **OK** and verify by running the task manually.
 
-# Display metadata if present
-if 'author' in current:
-    st.write(f"*Author:* {current['author']}")
-if 'date' in current:
-    st.write(f"*Date:* {current['date']}")
+    ### If Import Doesn't Work
+    - Create task manually:
+        1. Open **Task Scheduler** > **Action > Create Task**.
+        2. In **General**, name your task and enable **Run with highest privileges**.
+        3. In **Triggers**, set your schedule.
+        4. In **Actions**, select **Start a Program** and choose `run_main.vbs`.
+        5. Adjust any **Conditions** or **Settings** and save.
 
-# Display content
-content = current.get('content')
-if content:
-    for heading, items in content.items():
-        st.subheader(heading)
-        for idx, line in enumerate(items, start=1):
-            # Support multi-line entries
-            if '\n' in line:
-                st.markdown(f"{idx}. " + line)
-            else:
-                st.markdown(f"{idx}. {line}")
+    [Microsoft Task Scheduler Documentation](https://docs.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-start-page)
+    """)
 
-# Footer navigation hint
-st.markdown("---")
-st.markdown("Use the buttons above or arrow keys to navigate through the slides.")
+# Tab 3: Linux Automation
+with tabs[2]:
+    st.header("Automation on Linux with Cron")
+    st.markdown("""
+    ### Steps:
+    1. Install cron if necessary:
+    ```bash
+    sudo apt install cron
+    ```
+    2. Navigate to your automation folder.
+    3. Update paths in `synchronization.sh` and `example_crontab.txt`.
+    4. Import your crontab:
+    ```bash
+    crontab example_crontab.txt
+    ```
+    5. Verify crontab:
+    ```bash
+    crontab -l
+    ```
+    6. Make sure the script is executable:
+    ```bash
+    sudo chmod +x synchronization.sh
+    ```
 
-# Enable keyboard navigation via JavaScript hack
-st.components.v1.html('''
-<script>
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'ArrowLeft') {
-        document.querySelector('button[aria-label="◀ Prev"]').click();
-    }
-    if (e.key === 'ArrowRight') {
-        document.querySelector('button[aria-label="Next ▶"]').click();
-    }
-});
-</script>
-''', height=0)
+    **Cron Syntax:**
+    ```
+    * * * * * /path/to/script.sh
+    - - - - -
+    | | | | |
+    | | | | +----- Day of the week (0-6) (Sunday=0)
+    | | | +------- Month (1-12)
+    | | +--------- Day of the month (1-31)
+    | +----------- Hour (0-23)
+    +------------- Minute (0-59)
+    ```
+    """)
+
+# Tab 4: Cron Status - Live Monitoring
+with tabs[3]:
+    st.header("Current Cron Job Status")
+
+    st.subheader("Active Cron Jobs")
+    cron_list = subprocess.getoutput("crontab -l")
+    st.code(cron_list, language="bash")
+
+    st.subheader("Cron Service Status")
+    cron_status = subprocess.getoutput("systemctl status cron")
+    st.code(cron_status, language="bash")
+
+    st.subheader("Recent Cron Logs")
+    cron_logs = subprocess.getoutput("grep CRON /var/log/syslog | tail -n 10")
+    st.code(cron_logs, language="bash")

@@ -116,63 +116,79 @@ def read_workpackages(session, url, project_id):
 
 
 def parse_workpackages(workpackages):
-    """Parses read workpackages into a structured dictionary element.
+    """Parses work packages do OpenProject para uma estrutura padronizada.
 
-    Shapes work packages into a standard structure to use in the event creation
-    There might be ignored information. Minimum working example only needs
-    title, date, and time. If there happens any error during parsing,
-    that work package will be added to the `err` list.
-    Only the following parameters will be parsed to create an event, the rest
-    is discarded: ID, subject, description, parental relation, assignee,
-    last update date, due date, and "dueHour". "dueHour" parameter should be
-    located at the end of the description in the form of "dueHour=HH:MM:SS"
-    where H is hour, M is minute, and S is second. If the task starts with three
-    exclamations (!) marks, it will not be synchronized.
+    Faz ETL em cada WP buscando:
+      - wp_id (int)
+      - subject (string)
+      - description (HTML bruto)
+      - parent (ID + título, ou “No parent”)
+      - assignee (título ou “Not assigned to anyone”)
+      - due_date (YYYY-MM-DD, ou fallback para createdAt)
+      - due_hour (HH:MM:SS, vindo de customField19, ou fallback para createdAt)
+      - updated_at (timestamp ISO do WP)
 
-    Args:
-        workpackages: all workpackages returned from read_workpackages() func.
-
-    Returns:
-        parsed_wps: a dictionary of structured workpackages. Key is wp ID.
-        err: a list of could not structured workpackages with Exception info
+    Retorna:
+      - parsed_wps: dict[int, dict_com_campos_estruturados]
+      - err: lista de pares [elem_original, Exception]
     """
     parsed_wps = {}
     err = []
+
     for elem in workpackages['_embedded']['elements']:
-        # If description returns None, it will not be synfchronized
-        # Packages starting with "!!!" line will not be synchronized
-        if elem['description']['raw'] is None or \
-            elem['description']['raw'].split('\n')[0] == '!!!':
-            pass # Do not synchronize this package to Calendar
-        else:
-            try:
-                tmp = {}
-                tmp['wp_id'] = elem['id']  # Read work package ID
-                tmp['subject'] = elem['subject'].strip()  # Read work package subject
-                tmp['description'] = elem['description']['html']  # Save description
+        # Ignorar WP cujo “raw” da descrição seja None ou comece com “!!!”
+        raw_desc = elem.get('description', {}).get('raw')
+        if raw_desc is None or raw_desc.split('\n')[0] == '!!!':
+            continue
 
-                if elem['_links']['parent']['href']:  # If there is a parent
-                    tmp['parent'] = elem['_links']['parent']['href'].split('/')[-1] \
-                        + ":" + elem['_links']['parent']['title']
+        try:
+            tmp = {}
+            tmp['wp_id'] = elem['id']  # já é inteiro
+            tmp['subject'] = elem.get('subject', '').strip()
+
+            # Manter a descrição HTML (para aparecer no evento)
+            tmp['description'] = elem.get('description', {}).get('html', '')
+
+            # Parental relation: se existir, “parentId:title”; senão, “No parent”
+            parent_link = elem.get('_links', {}).get('parent', {}).get('href')
+            parent_title = elem.get('_links', {}).get('parent', {}).get('title')
+            if parent_link and parent_title:
+                parent_id = parent_link.rstrip('/').split('/')[-1]
+                tmp['parent'] = f"{parent_id}:{parent_title}"
+            else:
+                tmp['parent'] = "No parent"
+
+            # Assignee (pode não existir)
+            assignee_info = elem.get('_links', {}).get('assignee', {})
+            tmp['assignee'] = assignee_info.get('title', 'Não designado a nenhuma pessoa')
+
+            # due_date e due_hour:
+            #  - Se elem['dueDate'] estiver definido, usar esse date + customField19;
+            #  - Caso contrário, fallback para createdAt.
+            due_date_field = elem.get('dueDate')
+            if due_date_field:
+                tmp['due_date'] = due_date_field  # string “YYYY-MM-DD”
+                # Extrair do customField19 (que já foi validado via regex “HH:MM”)
+                tmp['due_hour'] = elem.get('customField19') or "00:00:00"
+            else:
+                # Sem dueDate, colocar createdAt como data/hora
+                created = elem.get('createdAt', '')  # ex: “2025-05-23T10:52:34.297Z”
+                if 'T' in created:
+                    dt_date, dt_time = created.split('T')
+                    tmp['due_date'] = dt_date
+                    # Tirar o “.mmmZ” do fim
+                    tmp['due_hour'] = dt_time.rstrip('Z')
                 else:
-                    tmp['parent'] = "No parent"
+                    tmp['due_date'] = created
+                    tmp['due_hour'] = "00:00:00"
 
-                if elem['_links']['assignee']['href']:  # There might not be an assignee
-                    tmp['assignee'] = elem['_links']['assignee']['title'] # if there is
-                else:
-                    tmp['assignee'] = 'Not assigned to anyone'  # if there is not
+            # updated_at vem de updatedAt
+            tmp['updated_at'] = elem.get('updatedAt', '')
 
-                if elem['dueDate']:  # Assumes due hour is specified
-                    tmp['due_date'] = elem['dueDate']  # if specified
-                    tmp['due_hour'] = elem['description']['raw'].split('\n')[-1].split('=')[-1].strip()
-                else:  # dueHour has no effect on time even if it is specified
-                    tmp['due_date'] = elem['createdAt'].split('T')[0]  # create date
-                    tmp['due_hour'] = elem['createdAt'].split('T')[-1][:-1]  # create time
+            parsed_wps[ tmp['wp_id'] ] = tmp
 
-                tmp['updated_at'] = elem['updatedAt']
-                parsed_wps[elem['id']] = tmp
-            except Exception as error:
-                err.append([elem, error])
+        except Exception as error:
+            err.append([elem, error])
 
     return parsed_wps, err
 
@@ -189,80 +205,138 @@ def read_events(service, calendar_id, time='2025-02-01T00:00:00Z'):
         print(error)
 
 def parse_events(events):
-    """Parses events based on the structure used to create events.
+    """Parses events do Google Calendar de volta para a estrutura de `parsed_wps`.
 
-    In order to check its content and situation, each event must be parsed
-    into a predefined structure.
-
-    Args:
-        events: all events returned from read_events() func.
-
-    Returns:
-        parsed_events: a dictionary of structured events. Key is wp ID.
-        err: a list of could not structured events with Exception info
+    Para cada evento, extrai:
+      - event_id   (elem['id'])
+      - wp_id      (inteiro extraído de summary antes de “:”)
+      - subject    (tudo após “:” em summary)
+      - assignee   (buscando “Assignee: …” na descrição)
+      - updated_at (buscando “UpdatedAt: …” na descrição)
+      - due_date   (a parte “YYYY-MM-DD” de end.dateTime ou end.date)
+      - due_hour   (a parte “HH:MM:SS” de end.dateTime, ou texto de “DueHour:” na descrição)
+    Retorna:
+      - parsed_events: dict[int_wp_id, dict_campos]
+      - err: lista de [elem_original, Exception]
     """
+    from dateutil.parser import isoparse
+
     parsed_events = {}
     err = []
+
     for elem in events:
         try:
             tmp = {}
-            tmp['event_id'] = elem['id']  # ID required in deletion and update
-            summary = elem['summary'].split(':')  # Split title of event
-            tmp['wp_id'] = summary[0]  # Workpackage ID on Openproject
-            tmp['subject'] = summary[-1]  # Workpackage subject on OpenProject
-            description = elem['description'].split('\n')  # Split description
-            tmp['assignee'] = description[-2]  # Assigne on OpenProject
-            tmp['updated_at'] = description[-1]  # Update time of wp saved on Calendar
-            due = elem['end']['dateTime'].split('T')  # Split dueDate to date, time
-            tmp['due_date'] = due[0]  # DueDate of created event
-            tmp['due_hour'] = due[1]  # DueHour of created event
-            parsed_events[int(tmp['wp_id'])] = tmp  # Save to parsed_events dic.
+            # 1) event_id
+            tmp['event_id'] = elem.get('id', '')
+
+            # 2) summary: “<wp_id>:<subject>” → separar apenas no primeiro “:”
+            summary = elem.get('summary', '') or ''
+            # Se summary não existir ou não tiver “:”, pular esse evento
+            if ':' not in summary:
+                raise ValueError(f"Summary inválido (espera ‘<id>:<texto>’): {summary}")
+            wp_id_str, _, subject = summary.partition(':')
+            try:
+                wp_id_int = int(wp_id_str.strip())
+            except Exception:
+                raise ValueError(f"WP ID não é inteiro: '{wp_id_str}'")
+            tmp['wp_id'] = wp_id_int
+            tmp['subject'] = subject.strip()
+
+            # 3) descrição: pode ser None ou string
+            raw_desc = elem.get('description', '') or ''
+            lines = [ linha.strip() for linha in raw_desc.splitlines() if linha.strip() ]
+
+            # Inicializar valores default
+            tmp['assignee'] = None
+            tmp['updated_at'] = None
+            tmp['due_hour'] = None
+
+            # Percorrer cada linha procurando prefixos conhecidos
+            for line in lines:
+                if line.startswith("Assignee:"):
+                    tmp['assignee'] = line.replace("Assignee:", "").strip()
+                elif line.startswith("UpdatedAt:"):
+                    tmp['updated_at'] = line.replace("UpdatedAt:", "").strip()
+                elif line.startswith("DueHour:"):
+                    tmp['due_hour'] = line.replace("DueHour:", "").strip()
+                # podemos ignorar “Parent: …” aqui, pois não precisamos dele no parser
+
+            # 4) start/end: pegar de end → se houver `dateTime`, extrair date + time;
+            #    caso tenha só `date` (evento dia todo), colocar time “00:00:00”
+            end_info = elem.get('end', {})
+            if 'dateTime' in end_info and end_info['dateTime']:
+                # ex: “2025-07-17T14:00:00-03:00”
+                dt_obj = isoparse(end_info['dateTime'])
+                tmp['due_date'] = dt_obj.date().isoformat()
+                tmp['due_hour'] = tmp.get('due_hour') or dt_obj.time().isoformat()
+            elif 'date' in end_info and end_info['date']:
+                tmp['due_date'] = end_info['date']
+                # se não veio `dateTime`, manter due_hour já lido de “DueHour:” ou “00:00:00”
+                tmp['due_hour'] = tmp.get('due_hour') or "00:00:00"
+            else:
+                # campo end ausente ou inválido
+                tmp['due_date'] = None
+                if tmp.get('due_hour') is None:
+                    tmp['due_hour'] = None
+
+            parsed_events[ wp_id_int ] = tmp
+
         except Exception as error:
-            err.append([elem, error])  # If a parsin error occurs, save to err list
+            err.append([elem, error])
 
     return parsed_events, err
 
 
 def wp_to_event(work_package):
-    """Converts workpackage to required event structure of Google Calendar
+    """Converte um WP estruturado em um body válido para a API do Google Calendar.
 
-    Google API requires a body to create, update, and delete events.
-    This function constructs the required body based on work package information.
-    Followings will be included in the body of the event: ID, subject, description,
-    parental relation, assignee, last update date, due date, and "dueHour".
-    "dueHour" parameter should be located at the end of the description in the
-    form of "dueHour=HH:MM:SS" where H is hour, M is minute, and S is second.
-    Note: Seperation oh H, M, and S must be done via `colon` (:) mark.
+    Monta:
+      - summary: “<wp_id>:<subject>”
+      - description: HTML da descrição original + linhas rotuladas
+      - start: data/hora vindos de due_date + due_hour
+      - end: uma hora depois de start
+      - reminders padrão
+    """
+    from datetime import timedelta
 
-    Args:
-        work_pakcage: Parsed work package
-
-    Returns:
-        event: An event body to use in API calls"""
     wp = work_package
-    event_start = str_to_date(wp['due_date'], wp['due_hour']) # Start datetime
-    event_finish = event_start + timedelta(hours=1) # Finish datetime
-    # Description includes, description, parental relation, assignee and last update datetime
-    # Description is saved in HTML formant. It includes </p> at the end.
-    # Thus there is no line breaking after description. However, if one uses
-    # raw format, line braking should be added between description and parent
-    description = wp['description'] + "Parent=" + wp['parent'] + "\n"\
-                  + wp['assignee'] + "\n" + wp['updated_at']
 
-    event = {'summary': str(wp['wp_id']) + ':' + wp['subject'],
-             'description': description,
-             'start': {'dateTime': event_start.astimezone().isoformat()},
-             'end': {'dateTime': event_finish.astimezone().isoformat()},
-             'reminders': {
-                 'useDefault': False,
-                 'overrides': [
-                     {'method': 'popup', 'minutes': 24 * 60},
-                     {'method': 'popup', 'minutes': 30},
-                     ],
-                 },
-             }
+    # Converte “YYYY-MM-DD” + “HH:MM:SS” em datetime UTC-local
+    event_start = str_to_date(wp['due_date'], wp['due_hour'])
+    event_finish = event_start + timedelta(hours=1)
 
+    # Montar descrição com rótulos explícitos
+    # - Descrição original já está em HTML (ou vazio)
+    desc_html = wp.get('description', '')
+    parent = wp.get('parent', '')
+    assignee = wp.get('assignee', '')
+    updated = wp.get('updated_at', '')
+    # Opcional: incluir o próprio HTML separado por linha em texto plano, 
+    # ou mantê-lo como está. Aqui mantemos “raw HTML” + rótulos
+    description = (
+        f"{desc_html}\n"
+        f"Parent: {parent}\n"
+        f"Assignee: {assignee}\n"
+        f"UpdatedAt: {updated}\n"
+        f"DueHour: {wp.get('due_hour', '')}"
+    )
+
+    event = {
+        'summary': f"{wp['wp_id']}:{wp['subject']}",
+        'description': description,
+        'start': {'dateTime': event_start.astimezone().isoformat()},
+        'end':   {'dateTime': event_finish.astimezone().isoformat()},
+        'reminders': {
+            'useDefault': False,
+            'overrides': [
+                {'method': 'popup', 'minutes': 24 * 60},
+                {'method': 'popup', 'minutes': 30},
+            ],
+        },
+    }
     return event
+
 
 
 def str_to_date(date, hour):
