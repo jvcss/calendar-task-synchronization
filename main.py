@@ -25,6 +25,7 @@ If the task starts with three exclamations (!) marks, it will not be synchronize
 from datetime import datetime
 import synchronization as sync
 from config import settings as s
+import urllib
 
 def main(parameters):
     """Synchronizes OpenProject tasks with Google Calendar.
@@ -41,7 +42,7 @@ def main(parameters):
             'calendar_id': the id of the Google Calendar,
             'openproject_api_url': 'your_open_project_url' + '/api/v3',
             'openproject_api_key': key to access OpenProject API,
-            'project_name': name of your OpenProject Project,
+            'assignee_id': id of the user,
             'save_logs': whether you want to sync logs to sheet or not,
             'sheet_id': Google Sheet id, if 'save_logs' false, can be an empty string
             }
@@ -56,21 +57,19 @@ def main(parameters):
 
     # OpenProject API configurations, session authorization and reading
     url = parameters['openproject_api_url']
+    parsed_url = urllib.parse.urlparse(url)
+    op_url = parsed_url.scheme + "://" + parsed_url.netloc
     api_key = parameters['openproject_api_key']
-    project_name = parameters['project_name'] # Name of your project as it is seen on OpenProject
+    assignee_id = parameters['assignee_id'] # Name of your project as it is seen on OpenProject
 
     # Read and parse work packages from OpenProject
     # Initilize and Authorize OpenProject session
     session = sync.openproject_session(api_key)
 
-    # Get project ID
-    projects = sync.get_projects_and_ids(session, url)
-    project_id = projects[project_name]
-
     # Read work packages in json structre
-    all_work_packages = sync.read_workpackages(session, url, project_id=project_id)
+    all_work_packages = sync.read_assignee_workpackages(session, url, assignee_id)
     # Parse work packages into predetermined structure
-    parsed_wps, op_err = sync.parse_workpackages(all_work_packages)
+    parsed_wps, op_err = sync.parse_workpackages(all_work_packages, op_url=op_url)
 
     # Load service account credentials
     credentials = sync.load_credentials(secret_file, scopes)
@@ -111,9 +110,9 @@ if __name__ == "__main__":
         'calendar_id': s.CALENDAR_ID_EMAIL,
         'openproject_api_url': 'https://projects.growthsolutions.com.br' + '/api/v3/',
         'openproject_api_key': s.PROJECTS_API_KEY,
-        'project_name': s.PROJECT_NAME,
+        'assignee_id': s.ASSIGNEE_ID.split(","),
         'save_logs': True,
-        'sheet_id': '1x-dn-_S89fLasqEiYelighvKEX9-mxjjulXtzzF8T2w'
+        'sheet_id': s.SHEET_ID
         }
 
     main(required_parameters)
