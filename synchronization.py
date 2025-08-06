@@ -107,11 +107,39 @@ def openproject_session(api_key):
     return session
 
 
-def read_workpackages(session, url, project_id):
+def read_projects_workpackages(session, url, project_id):
     """Reads work packages from OpenProject and return as json"""
-    api_url = url + "projects/{}/work_packages".format(project_id)
-    workpackages = json.loads(session.get(api_url).content.decode('utf-8'))['_embedded']['elements']
+    api_url = url + "work_packages"
 
+    headers = {
+        'Content-Type': 'application/hal+json'
+    }
+    params = {
+        'pageSize': 25,
+        'filters': json.dumps([{
+            'project': {
+                'operator': '=',
+                'values': project_id
+            }
+        }]),
+    }
+
+    workpackages = []
+    offset = 0
+    while True:
+        params['offset'] = offset
+
+        response = session.get(api_url, headers=headers, params=params)
+        response.raise_for_status()
+        content = json.loads(response.content.decode('utf-8'))
+        
+        if content['count'] == 0:
+            break
+        
+        workpackages += content['_embedded']['elements']
+    
+        offset += 1
+    
     return workpackages
 
 def read_assignee_workpackages(session, url, assignee_id):
@@ -146,7 +174,7 @@ def read_assignee_workpackages(session, url, assignee_id):
             break
         
         workpackages += content['_embedded']['elements']
-        
+
         offset += 1
     
     return workpackages

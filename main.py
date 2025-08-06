@@ -22,9 +22,10 @@ If the task starts with three exclamations (!) marks, it will not be synchronize
 %% $Copyright: Tapir Lab.$
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 """
+import sys
 from datetime import datetime
 import synchronization as sync
-from config import settings as s
+import config
 import urllib
 
 def main(parameters):
@@ -60,14 +61,26 @@ def main(parameters):
     parsed_url = urllib.parse.urlparse(url)
     op_url = parsed_url.scheme + "://" + parsed_url.netloc
     api_key = parameters['openproject_api_key']
-    assignee_id = parameters['assignee_id'] # Name of your project as it is seen on OpenProject
+
+    origin = parameters['origin'] # Origin of the workpackages (assignee or department)
+    origin_value = parameters['origin_value'] # The origin values used to get the workpackages
 
     # Read and parse work packages from OpenProject
     # Initilize and Authorize OpenProject session
     session = sync.openproject_session(api_key)
 
-    # Read work packages in json structre
-    all_work_packages = sync.read_assignee_workpackages(session, url, assignee_id)
+    # Read work packages
+    if origin == 'project':
+        projects = sync.get_projects_and_ids(session, url)
+        
+        all_work_packages = []
+        for project_name in origin_value:
+            project_id = projects[project_name]
+            all_work_packages += sync.read_projects_workpackages(session, url, project_id)
+    elif origin == 'assignee':
+        assignee_id = origin_value
+        all_work_packages = sync.read_assignee_workpackages(session, url, assignee_id)
+    
     # Parse work packages into predetermined structure
     parsed_wps, op_err = sync.parse_workpackages(all_work_packages, op_url=op_url)
 
@@ -94,7 +107,6 @@ def main(parameters):
 
     print('Synchronization has been completed at %s!' %datetime.today().isoformat())
 
-
 if __name__ == "__main__":
 
     # Before synchronization, you have to add your service account to your
@@ -103,6 +115,20 @@ if __name__ == "__main__":
     # If you do not want to save package logs, set 'save_logs=False'
     # If 'save_logs' is false, you do not need to provide sheet id.
     # Required parameters to synchronize OpenProject with Google Calendar.
+
+    config_file_path = sys.argv[1]
+    s = config.get_settings(config_file_path)
+    
+    # Handle different type of origin of work packages that can be used
+    if hasattr(s, 'ASSIGNEE_ID'):
+        origin = "assignee"
+        origin_value = s.ASSIGNEE_ID
+    elif hasattr(s, 'PROJECT_NAME'):
+        origin = "project"
+        origin_value = s.PROJECT_NAME.split(",")
+    else:
+        raise Exception("Um ID de atribuído (ASSIGNEE_ID) ou nome(s) de projeto (PROJECT_NAME) precisa ser informado no arquivo de configuração.")
+
     required_parameters = {
         'path_to_secret_file': s.CREDENTIALS_PATH,
         'SCOPES': ['https://www.googleapis.com/auth/calendar',
@@ -110,9 +136,11 @@ if __name__ == "__main__":
         'calendar_id': s.CALENDAR_ID_EMAIL,
         'openproject_api_url': 'https://projects.growthsolutions.com.br' + '/api/v3/',
         'openproject_api_key': s.PROJECTS_API_KEY,
-        'assignee_id': s.ASSIGNEE_ID.split(","),
         'save_logs': True,
-        'sheet_id': s.SHEET_ID
-        }
+        'sheet_id': s.SHEET_ID,
+        
+        'origin': origin,
+        'origin_value': origin_value
+    }
 
     main(required_parameters)
