@@ -37,8 +37,8 @@ class Settings:
 
 def get_settings(config_file_path='config.ini'):
     # instancia única, importável por todo o app
-    print(f"config base path: {Path(__file__).parent / config_file_path}")
-    config_path = os.getenv("OPEN_SHEET_APP_CONFIG", Path(__file__).parent / config_file_path)
+    print(f"config base path: {config_file_path}")
+    config_path = os.getenv("OPEN_SHEET_APP_CONFIG", config_file_path)
     _base = config_path
     settings = Settings(str(_base))
     return settings
