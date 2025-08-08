@@ -3,6 +3,7 @@ def f():
     import streamlit as st
     import os
     from configparser import ConfigParser
+    import main
 
     PARENT_FOLDER = os.path.dirname(os.path.abspath(__file__))
     CONFIG_FILES_FOLDER = os.path.join(PARENT_FOLDER, "config_files")
@@ -89,15 +90,18 @@ def f():
             # Origem das tarefas
             st.markdown(f"{origin_type}: {", ".join(origin_value.split(","))}")
 
-            cols = st.columns(3)
+            _, config_path = get_config(sync["filename"])
+
+            cols = st.columns(4)
             with cols[0]:
+                st.button("🔄 Sincronizar", on_click=lambda config_path=config_path: main.main(config_path), key=f"button_sync_{button_key_sync_name}")
+            with cols[1]:
                 with open(config['CREDENTIALS_PATH'], "r") as f:
                     st.download_button("📥 Baixar arquivo chaves", f, file_name="google_keys.json", key=f"button_download_keys_{button_key_sync_name}")
-            with cols[1]:
-                _, config_path = get_config(sync["filename"])
+            with cols[2]:
                 with open(config_path, "r") as f:
                     st.download_button("📥 Baixar configuração", f, file_name="config.ini", key=f"button_download_config_{button_key_sync_name}")
-            with cols[2]:
+            with cols[3]:
                 st.button(f"🗑️ Apagar sincronização", on_click=lambda sync=sync: delete_sync(sync), key=f"delete_button_{button_key_sync_name}")
 
 

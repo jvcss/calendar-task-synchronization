@@ -138,7 +138,6 @@ def read_projects_workpackages(session, url, project_id):
         
         workpackages += content['_embedded']['elements']
 
-        break
         offset += 1
     
     return workpackages
@@ -176,7 +175,6 @@ def read_assignee_workpackages(session, url, assignee_id):
         
         workpackages += content['_embedded']['elements']
         
-        break
         offset += 1
     
     return workpackages

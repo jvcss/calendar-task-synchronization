@@ -28,7 +28,7 @@ import synchronization as sync
 import config
 import urllib
 
-def main(parameters):
+def main(config_file_path):
     """Synchronizes OpenProject tasks with Google Calendar.
 
     The main function executes the synchronization task. Its parameters are given
@@ -48,6 +48,33 @@ def main(parameters):
             'sheet_id': Google Sheet id, if 'save_logs' false, can be an empty string
             }
     """
+
+    s = config.get_settings(config_file_path)
+    
+    # Handle different type of origin of work packages that can be used
+    if hasattr(s, 'ASSIGNEE_ID'):
+        origin = "assignee"
+        origin_value = s.ASSIGNEE_ID
+    elif hasattr(s, 'PROJECT_NAME'):
+        origin = "project"
+        origin_value = s.PROJECT_NAME.split(",")
+    else:
+        raise Exception("Um ID de atribuído (ASSIGNEE_ID) ou nome(s) de projeto (PROJECT_NAME) precisa ser informado no arquivo de configuração.")
+
+    parameters = {
+        'path_to_secret_file': s.CREDENTIALS_PATH,
+        'SCOPES': ['https://www.googleapis.com/auth/calendar',
+                   'https://www.googleapis.com/auth/spreadsheets'],
+        'calendar_id': s.CALENDAR_ID_EMAIL,
+        'openproject_api_url': 'https://projects.growthsolutions.com.br' + '/api/v3/',
+        'openproject_api_key': s.PROJECTS_API_KEY,
+        'save_logs': True,
+        'sheet_id': s.SHEET_ID,
+        
+        'origin': origin,
+        'origin_value': origin_value
+    }
+
     # Google Calendar and Sheets API Configurations
     # Path to service account credentials json file
     secret_file = parameters['path_to_secret_file']
@@ -117,30 +144,5 @@ if __name__ == "__main__":
     # Required parameters to synchronize OpenProject with Google Calendar.
 
     config_file_path = sys.argv[1]
-    s = config.get_settings(config_file_path)
+    main(config_file_path)
     
-    # Handle different type of origin of work packages that can be used
-    if hasattr(s, 'ASSIGNEE_ID'):
-        origin = "assignee"
-        origin_value = s.ASSIGNEE_ID
-    elif hasattr(s, 'PROJECT_NAME'):
-        origin = "project"
-        origin_value = s.PROJECT_NAME.split(",")
-    else:
-        raise Exception("Um ID de atribuído (ASSIGNEE_ID) ou nome(s) de projeto (PROJECT_NAME) precisa ser informado no arquivo de configuração.")
-
-    required_parameters = {
-        'path_to_secret_file': s.CREDENTIALS_PATH,
-        'SCOPES': ['https://www.googleapis.com/auth/calendar',
-                   'https://www.googleapis.com/auth/spreadsheets'],
-        'calendar_id': s.CALENDAR_ID_EMAIL,
-        'openproject_api_url': 'https://projects.growthsolutions.com.br' + '/api/v3/',
-        'openproject_api_key': s.PROJECTS_API_KEY,
-        'save_logs': True,
-        'sheet_id': s.SHEET_ID,
-        
-        'origin': origin,
-        'origin_value': origin_value
-    }
-
-    main(required_parameters)
