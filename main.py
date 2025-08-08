@@ -71,11 +71,11 @@ def main(parameters):
 
     # Read work packages
     if origin == 'project':
-        projects = sync.get_projects_and_ids(session, url)
+        projects = {name.lower(): id for name, id in sync.get_projects_and_ids(session, url).items()}
         
         all_work_packages = []
         for project_name in origin_value:
-            project_id = projects[project_name]
+            project_id = projects[project_name.lower()]
             all_work_packages += sync.read_projects_workpackages(session, url, project_id)
     elif origin == 'assignee':
         assignee_id = origin_value
