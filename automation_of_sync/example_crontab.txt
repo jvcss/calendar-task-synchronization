@@ -10,4 +10,5 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 # |  |  |  |  |
 # *  *  *  *  * command to be executed
 # To repeat task at the integer multiples of 10 min (hh:10,...,hh:50) use */10
-*/10 * * * * 'path_to_repository'/automation_of_sync/synchronization.sh
+# parameters: path to Python interpreter, to main.py, and to config files folder
+*/10 * * * * /home/calendar-task-synchronization/calendar-task_synchronization/calendar-task-synchronization/automation_of_sync/synchronization.sh /home/calendar-task-synchronization/.venv/bin/python /home/calendar-task-synchronization/main.py /home/calendar-task-synchronization/calendar-task-synchronization/config_files

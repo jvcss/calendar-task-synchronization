@@ -22,7 +22,7 @@ class Settings:
         parser.read(ini_path)
 
         if 'security' not in parser:
-            raise ValueError("Seção [security] não encontrada em config.ini")
+            raise ValueError(f"Seção [security] não encontrada em {ini_path}")
 
         for key, val in parser['security'].items():
             # transforma em atributo MAIÚSCULO

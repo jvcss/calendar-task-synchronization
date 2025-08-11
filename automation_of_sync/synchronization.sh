@@ -1,10 +1,10 @@
 #!/bin/bash
 
-PYTHON_SCRIPT=$1
-CONFIG_FILES_FOLDER=$2
+PYTHON=$1
+PYTHON_SCRIPT=$2
+CONFIG_FILES_FOLDER=$3
 
-for file in $2/*.ini
+for file in $3/*.ini
 do
-    python3 $1 "$file" >> test.log
+    $1 $2 "$file" >> test.log
 done
-
