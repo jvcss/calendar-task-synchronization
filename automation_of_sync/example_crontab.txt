@@ -1,14 +1,6 @@
 SHELL=/bin/bash
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 
-# Example of job definition:
-# .---------------- minute (0 - 59)
-# |  .------------- hour (0 - 23)
-# |  |  .---------- day of month (1 - 31)
-# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
-# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
-# |  |  |  |  |
-# *  *  *  *  * command to be executed
-# To repeat task at the integer multiples of 10 min (hh:10,...,hh:50) use */10
-# parameters: path to Python interpreter, to main.py, and to config files folder
-*/10 * * * * /home/calendar-task-synchronization/calendar-task_synchronization/calendar-task-synchronization/automation_of_sync/synchronization.sh /home/calendar-task-synchronization/.venv/bin/python /home/calendar-task-synchronization/main.py /home/calendar-task-synchronization/calendar-task-synchronization/config_files
+# Sincronização de calendários OpenProject e Google Calendar, a cada 20 minutos
+CALENDAR_FOLDER=/home/ubuntu/calendar-task-synchronization
+*/20 * * * * $CALENDAR_FOLDER/automation_of_sync/synchronization.sh $CALENDAR_FOLDER/.venv/bin/python $CALENDAR_FOLDER/main.py $CALENDAR_FOLDER/config_files
