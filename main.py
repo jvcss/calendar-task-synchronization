@@ -22,11 +22,13 @@ If the task starts with three exclamations (!) marks, it will not be synchronize
 %% $Copyright: Tapir Lab.$
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 """
+import sys
 from datetime import datetime
 import synchronization as sync
-from config import settings as s
+import config
+import urllib
 
-def main(parameters):
+def main(config_file_path):
     """Synchronizes OpenProject tasks with Google Calendar.
 
     The main function executes the synchronization task. Its parameters are given
@@ -41,11 +43,38 @@ def main(parameters):
             'calendar_id': the id of the Google Calendar,
             'openproject_api_url': 'your_open_project_url' + '/api/v3',
             'openproject_api_key': key to access OpenProject API,
-            'project_name': name of your OpenProject Project,
+            'assignee_id': id of the user,
             'save_logs': whether you want to sync logs to sheet or not,
             'sheet_id': Google Sheet id, if 'save_logs' false, can be an empty string
             }
     """
+
+    s = config.get_settings(config_file_path)
+    
+    # Handle different type of origin of work packages that can be used
+    if hasattr(s, 'ASSIGNEE_ID'):
+        origin = "assignee"
+        origin_value = s.ASSIGNEE_ID
+    elif hasattr(s, 'PROJECT_NAME'):
+        origin = "project"
+        origin_value = s.PROJECT_NAME.split(",")
+    else:
+        raise Exception("Um ID de atribuído (ASSIGNEE_ID) ou nome(s) de projeto (PROJECT_NAME) precisa ser informado no arquivo de configuração.")
+
+    parameters = {
+        'path_to_secret_file': s.CREDENTIALS_PATH,
+        'SCOPES': ['https://www.googleapis.com/auth/calendar',
+                   'https://www.googleapis.com/auth/spreadsheets'],
+        'calendar_id': s.CALENDAR_ID_EMAIL,
+        'openproject_api_url': 'https://projects.growthsolutions.com.br' + '/api/v3/',
+        'openproject_api_key': s.PROJECTS_API_KEY,
+        'save_logs': True,
+        'sheet_id': s.SHEET_ID,
+        
+        'origin': origin,
+        'origin_value': origin_value
+    }
+
     # Google Calendar and Sheets API Configurations
     # Path to service account credentials json file
     secret_file = parameters['path_to_secret_file']
@@ -56,21 +85,31 @@ def main(parameters):
 
     # OpenProject API configurations, session authorization and reading
     url = parameters['openproject_api_url']
+    parsed_url = urllib.parse.urlparse(url)
+    op_url = parsed_url.scheme + "://" + parsed_url.netloc
     api_key = parameters['openproject_api_key']
-    project_name = parameters['project_name'] # Name of your project as it is seen on OpenProject
+
+    origin = parameters['origin'] # Origin of the workpackages (assignee or department)
+    origin_value = parameters['origin_value'] # The origin values used to get the workpackages
 
     # Read and parse work packages from OpenProject
     # Initilize and Authorize OpenProject session
     session = sync.openproject_session(api_key)
 
-    # Get project ID
-    projects = sync.get_projects_and_ids(session, url)
-    project_id = projects[project_name]
-
-    # Read work packages in json structre
-    all_work_packages = sync.read_workpackages(session, url, project_id=project_id)
+    # Read work packages
+    if origin == 'project':
+        projects = {name.lower(): id for name, id in sync.get_projects_and_ids(session, url).items()}
+        
+        all_work_packages = []
+        for project_name in origin_value:
+            project_id = projects[project_name.lower()]
+            all_work_packages += sync.read_projects_workpackages(session, url, project_id)
+    elif origin == 'assignee':
+        assignee_id = origin_value
+        all_work_packages = sync.read_assignee_workpackages(session, url, assignee_id)
+    
     # Parse work packages into predetermined structure
-    parsed_wps, op_err = sync.parse_workpackages(all_work_packages)
+    parsed_wps, op_err = sync.parse_workpackages(all_work_packages, op_url=op_url)
 
     # Load service account credentials
     credentials = sync.load_credentials(secret_file, scopes)
@@ -95,7 +134,6 @@ def main(parameters):
 
     print('Synchronization has been completed at %s!' %datetime.today().isoformat())
 
-
 if __name__ == "__main__":
 
     # Before synchronization, you have to add your service account to your
@@ -104,16 +142,7 @@ if __name__ == "__main__":
     # If you do not want to save package logs, set 'save_logs=False'
     # If 'save_logs' is false, you do not need to provide sheet id.
     # Required parameters to synchronize OpenProject with Google Calendar.
-    required_parameters = {
-        'path_to_secret_file': s.CREDENTIALS_PATH,
-        'SCOPES': ['https://www.googleapis.com/auth/calendar',
-                   'https://www.googleapis.com/auth/spreadsheets'],
-        'calendar_id': s.CALENDAR_ID_EMAIL,
-        'openproject_api_url': 'https://projects.growthsolutions.com.br' + '/api/v3/',
-        'openproject_api_key': s.PROJECTS_API_KEY,
-        'project_name': s.PROJECT_NAME,
-        'save_logs': True,
-        'sheet_id': '1x-dn-_S89fLasqEiYelighvKEX9-mxjjulXtzzF8T2w'
-        }
 
-    main(required_parameters)
+    config_file_path = sys.argv[1]
+    main(config_file_path)
+    

@@ -22,7 +22,7 @@ class Settings:
         parser.read(ini_path)
 
         if 'security' not in parser:
-            raise ValueError("Seção [security] não encontrada em config.ini")
+            raise ValueError(f"Seção [security] não encontrada em {ini_path}")
 
         for key, val in parser['security'].items():
             # transforma em atributo MAIÚSCULO
@@ -35,8 +35,10 @@ class Settings:
         attrs = ", ".join(f"{k}={v!r}" for k,v in self.__dict__.items())
         return f"<security {attrs}>"
 
-# instancia única, importável por todo o app
-print(f"config base path: {Path(__file__).parent / 'config.ini'}")
-config_path = os.getenv("OPEN_SHEET_APP_CONFIG", Path(__file__).parent / "config.ini")
-_base = config_path
-settings = Settings(str(_base))
+def get_settings(config_file_path='config.ini'):
+    # instancia única, importável por todo o app
+    print(f"config base path: {config_file_path}")
+    config_path = os.getenv("OPEN_SHEET_APP_CONFIG", config_file_path)
+    _base = config_path
+    settings = Settings(str(_base))
+    return settings

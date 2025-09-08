@@ -1,13 +1,15 @@
 import streamlit as st
 import subprocess
+from config_interface import f
 
 st.set_page_config(page_title="Automation of Calendar Sync", layout="wide")
 
 # Define tab structure
-tabs = st.tabs(["Intro", "Windows Automation", "Linux Automation", "Cron Status"])
+tabs = st.tabs(["Intro", "Windows Automation", "Linux Automation", "Cron Status", "Sync Configurations"])
 
 # Tab 1: Introduction
 with tabs[0]:
+
     st.header("Automation of Calendar Sync")
     st.markdown("""
     - **Author:** João Victor Cardoso dos Santos (JVCSS)
@@ -91,3 +93,7 @@ with tabs[3]:
     st.subheader("Recent Cron Logs")
     cron_logs = subprocess.getoutput("grep CRON /var/log/syslog | tail -n 10")
     st.code(cron_logs, language="bash")
+
+with tabs[4]:
+
+    f()

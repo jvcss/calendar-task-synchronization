@@ -107,15 +107,79 @@ def openproject_session(api_key):
     return session
 
 
-def read_workpackages(session, url, project_id):
+def read_projects_workpackages(session, url, project_id):
     """Reads work packages from OpenProject and return as json"""
-    api_url = url + "projects/{}/work_packages".format(project_id)
-    workpackages = json.loads(session.get(api_url).content.decode('utf-8'))
+    api_url = url + "work_packages"
 
+    headers = {
+        'Content-Type': 'application/hal+json'
+    }
+    params = {
+        'pageSize': 25,
+        'filters': json.dumps([{
+            'project': {
+                'operator': '=',
+                'values': project_id
+            }
+        }]),
+    }
+
+    workpackages = []
+    offset = 0
+    while True:
+        params['offset'] = offset
+
+        response = session.get(api_url, headers=headers, params=params)
+        response.raise_for_status()
+        content = json.loads(response.content.decode('utf-8'))
+        
+        if content['count'] == 0:
+            break
+        
+        workpackages += content['_embedded']['elements']
+
+        offset += 1
+    
     return workpackages
 
+def read_assignee_workpackages(session, url, assignee_id):
+    """Reads work packages from OpenProject and return as json"""
+    
+    api_url = url + "work_packages"
+    headers = {
+        'Content-Type': 'application/hal+json'
+    }
+    params = {
+        'pageSize': 25,
 
-def parse_workpackages(workpackages):
+        'filters': json.dumps([{
+            'assigned_to': {
+                'operator': '=',
+                'values': assignee_id
+            }
+        }]),
+        'sortBy': """[["id", "desc"]]"""
+    }
+
+    workpackages = []
+    offset = 1
+    while True:
+        params['offset'] = offset
+
+        response = session.get(api_url, headers=headers, params=params)
+        response.raise_for_status()
+        content = json.loads(response.content.decode('utf-8'))
+        
+        if content['count'] == 0:
+            break
+        
+        workpackages += content['_embedded']['elements']
+        
+        offset += 1
+    
+    return workpackages
+
+def parse_workpackages(workpackages, op_url):
     """Parses work packages do OpenProject para uma estrutura padronizada.
 
     Faz ETL em cada WP buscando:
@@ -124,9 +188,11 @@ def parse_workpackages(workpackages):
       - description (HTML bruto)
       - parent (ID + título, ou “No parent”)
       - assignee (título ou “Not assigned to anyone”)
+      - start_date (YYYY-MM-DD, ou fallback para createdAt)
       - due_date (YYYY-MM-DD, ou fallback para createdAt)
       - due_hour (HH:MM:SS, vindo de customField19, ou fallback para createdAt)
       - updated_at (timestamp ISO do WP)
+      - department
 
     Retorna:
       - parsed_wps: dict[int, dict_com_campos_estruturados]
@@ -135,7 +201,7 @@ def parse_workpackages(workpackages):
     parsed_wps = {}
     err = []
 
-    for elem in workpackages['_embedded']['elements']:
+    for elem in workpackages:
         # Ignorar WP cujo “raw” da descrição seja None ou comece com “!!!”
         raw_desc = elem.get('description', {}).get('raw')
         if raw_desc is None or raw_desc.split('\n')[0] == '!!!':
@@ -161,7 +227,13 @@ def parse_workpackages(workpackages):
             # Assignee (pode não existir)
             assignee_info = elem.get('_links', {}).get('assignee', {})
             tmp['assignee'] = assignee_info.get('title', 'Não designado a nenhuma pessoa')
-
+            
+            # start_date
+            start_date_field = elem.get('startDate')
+            if not start_date_field:
+                start_date_field = elem.get('createdAt', '').split('T')[0]
+            tmp['start_date'] = start_date_field
+                
             # due_date e due_hour:
             #  - Se elem['dueDate'] estiver definido, usar esse date + customField19;
             #  - Caso contrário, fallback para createdAt.
@@ -184,6 +256,12 @@ def parse_workpackages(workpackages):
 
             # updated_at vem de updatedAt
             tmp['updated_at'] = elem.get('updatedAt', '')
+
+            # Get the department
+            tmp['department'] = elem['_links']['project']['title']
+
+            # Get work package URL
+            tmp['url'] = f"{op_url}/work_packages/{elem['id']}"
 
             parsed_wps[ tmp['wp_id'] ] = tmp
 
@@ -303,23 +381,27 @@ def wp_to_event(work_package):
     wp = work_package
 
     # Converte “YYYY-MM-DD” + “HH:MM:SS” em datetime UTC-local
-    event_start = str_to_date(wp['due_date'], wp['due_hour'])
-    event_finish = event_start + timedelta(hours=1)
+    event_start = str_to_date(wp['start_date'], "08:00:00")
+    event_finish = str_to_date(wp['due_date'], "18:00:00")
 
     # Montar descrição com rótulos explícitos
     # - Descrição original já está em HTML (ou vazio)
     desc_html = wp.get('description', '')
+    department = wp.get('department', '')
     parent = wp.get('parent', '')
     assignee = wp.get('assignee', '')
     updated = wp.get('updated_at', '')
+    wp_url = wp.get('url', '')
     # Opcional: incluir o próprio HTML separado por linha em texto plano, 
     # ou mantê-lo como está. Aqui mantemos “raw HTML” + rótulos
     description = (
         f"{desc_html}\n"
+        f"Department: {department}\n"
         f"Parent: {parent}\n"
         f"Assignee: {assignee}\n"
         f"UpdatedAt: {updated}\n"
-        f"DueHour: {wp.get('due_hour', '')}"
+        f"DueHour: {wp.get('due_hour', '')}\n"
+        f"{wp_url}\n"
     )
 
     event = {
